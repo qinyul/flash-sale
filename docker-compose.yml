@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: flashsale_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASS:-password}
+      POSTGRES_DB: ${DB_NAME:-flashsale}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./migration/migrate-and-seed.sql:/docker-entrypoint-initdb.d/migrate-and-seed.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: flashsale_app
+    ports:
+      - "8080:8080"
+    environment:
+        - DB_HOST=db
+        - DB_PORT=5432
+        - DB_USER=${DB_USER:-user}
+        - DB_PASS=${DB_PASS:-password}
+        - DB_NAME=${DB_NAME:-flashsale}
+        - DB_SSL_MODE=${DB_SSL_MODE:-disable}
+        - DB_MAX_OPEN_CONNS=${DB_MAX_OPEN_CONNS:-100}
+        - DB_MAX_IDLE_CONNS=${DB_MAX_IDLE_CONNS:-100}
+        - DB_CONN_MAX_LIFETIME=${DB_CONN_MAX_LIFETIME:-30m}
+        - DB_CONN_MAX_IDLE_TIME=${DB_CONN_MAX_IDLE_TIME:-5m}
+        - APP_PORT=8080
+        - MAX_BODY_BYTES=${MAX_BODY_BYTES:-1048576}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+    
+  loadtest:
+    image: grafana/k6:latest
+    container_name: flashsale_loadtest
+    environment:
+      - BASE_URL=http://app:8080
+      - TARGET=100
+    volumes:
+      - ./loadtest/script.js:/script.js
+    command: run /script.js
+    depends_on:
+      app:
+        condition: service_started
+volumes:
+  postgres_data:
