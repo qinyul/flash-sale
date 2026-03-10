@@ -1,8 +1,7 @@
 package config
 
 import (
-	"log/slog"
-	"os"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -35,59 +34,100 @@ type DatabaseConfig struct {
 	ConnMaxLifetime time.Duration
 }
 
-func LoadConfig() *Config {
-	if err := godotenv.Load(); err != nil {
-		slog.Info(".env not found, relying on environment variables")
-	}
+// EnvGetter defines the signature for any function that can look up an environment variable
+// it will matches the exact signature of os.Lookupenv
+type EnvGetter func(key string) (string, bool)
 
-	maxOpenConns, err := strconv.Atoi(getEnv("DB_MAX_OPEN_CONNS", "50"))
-	if err != nil {
-		maxOpenConns = 50
-	}
-	maxIdleConns, err := strconv.Atoi(getEnv("DB_MAX_IDLE_CONNS", "25"))
-	if err != nil {
-		maxIdleConns = 25
-	}
-
+func LoadConfig(getEnvFn EnvGetter) (*Config, error) {
+	_ = godotenv.Load()
 	// default max request body size 1MB
-	maxBodyBytes, err := strconv.Atoi(getEnv("MAX_BODY_BYTES", "1048576"))
+	maxOpenConns, err := parseEnvInt(getEnvFn, "DB_MAX_OPEN_CONNS", 100)
 	if err != nil {
-		maxBodyBytes = 1048576
+		return nil, err
 	}
 
-	connMaxLifetime, _ := time.ParseDuration(getEnv("DB_CONN_MAX_LIFETIME", "5m"))
-	connMaxIdletime, _ := time.ParseDuration(getEnv("DB_CONN_MAX_IDLE_TIME", "1m"))
+	maxIdleConns, err := parseEnvInt(getEnvFn, "DB_MAX_IDLE_CONNS", 100)
+	if err != nil {
+		return nil, err
+	}
 
-	readTimeout, _ := time.ParseDuration(getEnv("APP_READ_TIMEOUT", "5s"))
-	writeTimeout, _ := time.ParseDuration(getEnv("APP_WRITE_TIMEOUT", "10s"))
-	idleTimeout, _ := time.ParseDuration(getEnv("APP_IDLE_TIMEOUT", "120s"))
+	maxBodyBytes, err := parseEnvInt(getEnvFn, "MAX_BODY_BYTES", 1048576)
+	if err != nil {
+		return nil, err
+	}
+
+	readTimeout, err := parseEnvDuration(getEnvFn, "APP_READ_TIMEOUT", "5s")
+	if err != nil {
+		return nil, err
+	}
+
+	writeTimeout, err := parseEnvDuration(getEnvFn, "APP_WRITE_TIMEOUT", "10s")
+	if err != nil {
+		return nil, err
+	}
+
+	idleTimeout, err := parseEnvDuration(getEnvFn, "APP_IDLE_TIMEOUT", "120s")
+	if err != nil {
+		return nil, err
+	}
+
+	connMaxLifetime, err := parseEnvDuration(getEnvFn, "DB_CONN_MAX_LIFETIME", "30m")
+	if err != nil {
+		return nil, err
+	}
+
+	connMaxIdleTime, err := parseEnvDuration(getEnvFn, "DB_CONN_MAX_IDLE_TIME", "5m")
+	if err != nil {
+		return nil, err
+	}
 
 	return &Config{
 		App: AppConfig{
-			Port:         getEnv("APP_PORT", "8080"),
+			Port:         getEnvString(getEnvFn, "APP_PORT", "8080"),
 			ReadTimeout:  readTimeout,
 			WriteTimeout: writeTimeout,
 			IdleTimeout:  idleTimeout,
 			MaxBodyBytes: int64(maxBodyBytes),
 		},
 		Database: DatabaseConfig{
-			Host:            getEnv("DB_HOST", "localhost"),
-			Port:            getEnv("DB_PORT", "5432"),
-			User:            getEnv("DB_USER", "user"),
-			Password:        getEnv("DB_PASS", "password"),
-			DBName:          getEnv("DB_NAME", "flashsale"),
+			Host:            getEnvString(getEnvFn, "DB_HOST", "localhost"),
+			Port:            getEnvString(getEnvFn, "DB_PORT", "5432"),
+			User:            getEnvString(getEnvFn, "DB_USER", "user"),
+			Password:        getEnvString(getEnvFn, "DB_PASS", "password"),
+			DBName:          getEnvString(getEnvFn, "DB_NAME", "flashsale"),
 			MaxOpenConns:    maxOpenConns,
 			MaxIdleConns:    maxIdleConns,
-			SSLMode:         getEnv("DB_SSL_MODE", "disable"),
+			SSLMode:         getEnvString(getEnvFn, "DB_SSL_MODE", "disable"),
 			ConnMaxLifetime: connMaxLifetime,
-			ConnMaxIdleTime: connMaxIdletime,
+			ConnMaxIdleTime: connMaxIdleTime,
 		},
-	}
+	}, nil
 }
 
-func getEnv(key, fallback string) string {
-	if value, exists := os.LookupEnv(key); exists {
+func getEnvString(getEnvFn EnvGetter, key, fallback string) string {
+	if value, exists := getEnvFn(key); exists {
 		return value
 	}
 	return fallback
+}
+
+func parseEnvInt(getEnvFn EnvGetter, key string, fallback int) (int, error) {
+	valStr := getEnvString(getEnvFn, key, "")
+	if valStr == "" {
+		return fallback, nil
+	}
+	val, err := strconv.Atoi(valStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid integer for %s: %w", key, err)
+	}
+	return val, nil
+}
+
+func parseEnvDuration(getEnvFn EnvGetter, key, fallback string) (time.Duration, error) {
+	valStr := getEnvString(getEnvFn, key, fallback)
+	val, err := time.ParseDuration(valStr)
+	if err != nil {
+		return 0, fmt.Errorf("Invalid duration for :%s: %w", key, err)
+	}
+	return val, nil
 }

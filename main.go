@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -20,7 +21,10 @@ import (
 
 func main() {
 	// init configuration
-	cfg := config.LoadConfig()
+	cfg, err := config.LoadConfig(os.LookupEnv)
+	if err != nil {
+		log.Fatalf("FATAL: config error: %v", err)
+	}
 
 	// setup infrastucture (Database)
 	db, err := infrastructure.NewPostgresDB(cfg.Database)

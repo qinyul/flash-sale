@@ -1,4 +1,9 @@
-.PHONY: dev deploy down logs-app logs-loadtest clean
+.PHONY: dev deploy down logs-app logs-loadtest clean test-integration
+
+# Integration tests
+test-integration:
+	docker-compose up --build --abort-on-container-exit test
+	docker-compose rm -fsv test db_test
 
 # Deployment: Runs DB, App, and Loadtest
 benchmark:

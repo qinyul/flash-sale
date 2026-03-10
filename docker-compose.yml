@@ -18,6 +18,23 @@ services:
       retries: 5
     restart: unless-stopped
 
+  db_test:
+    image: postgres:15-alpine
+    container_name: flashsale_db_test
+    environment:
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASS:-password}
+      POSTGRES_DB: ${DB_NAME_TEST:-flashsale_test}
+    ports:
+     - "${DB_PORT_TEST:-5433}:5432"
+    volumes:
+      - ./migration/migrate-and-seed.sql:/docker-entrypoint-initdb.d/migrate-and-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
   app:
     build: .
     container_name: flashsale_app
@@ -53,5 +70,27 @@ services:
     depends_on:
       app:
         condition: service_started
+
+  test:
+    build:
+      context: .
+      target: builder
+    container_name: flashsale_test
+    environment:
+      - DB_HOST=db_test
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-user}
+      - DB_PASS=${DB_PASS:-password}
+      - DB_NAME=flashsale_test
+      - DB_SSL_MODE=disable
+      - DB_MAX_OPEN_CONNS=100
+      - DB_MAX_IDLE_CONNS=100
+      - DB_CONN_MAX_LIFETIME=30m
+      - DB_CONN_MAX_IDLE_TIME=5m
+      - MAX_BODY_BYTES=1048576
+    depends_on:
+      db_test:
+        condition: service_healthy
+    command: go test -v -tags=integration ./tests/...
 volumes:
   postgres_data:
