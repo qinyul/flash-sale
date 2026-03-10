@@ -175,6 +175,21 @@ The spike test simulates a rapid ramp-up of users to verify:
 - `loadtest/`: k6 spike test scripts.
 - `tests/`: Integration tests.
 
+## Database Migrations
+
+The database schema and initial data are managed automatically using Docker's initialization feature.
+
+- **Automated Setup**: When you run `make dev` or `make benchmark`, the `migration/migrate-and-seed.sql` file is mounted to the `/docker-entrypoint-initdb.d/` directory of the PostgreSQL container.
+- **Initialization**: PostgreSQL executes any `.sql` scripts in that directory upon the very first startup of the container.
+- **Schema Details**: The migration script handles:
+    - Creating necessary extensions (e.g., `pgcrypto` for UUIDs).
+    - Defining custom types (e.g., `order_status` ENUM).
+    - Setting up tables for `products`, `inventory`, and `orders`.
+    - Creating triggers for automatic `updated_at` timestamps.
+    - Adding indexes for performance optimization.
+
+> **Note**: If you modify the `migrate-and-seed.sql` file and want the changes to reflect in an existing database, you must delete the volume or the container and restart it (e.g., `make clean && make dev`).
+
 ## Postman Collection
 
 You can find the Postman collection for this project in the `postman-collection/` directory. You can download and import it into Postman to quickly test the API endpoints:
