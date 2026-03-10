@@ -7,6 +7,7 @@ A high-concurrency flash sale system built with Go, PostgreSQL, and Docker. This
 The following sequence diagram illustrates how a purchase request travels through the layers, ensuring data integrity with pessimistic locking:
 
 ```mermaid
+%%{init: {'theme': 'dark'}}%%
 sequenceDiagram
     participant C as Client
     participant M as Middleware
@@ -21,7 +22,7 @@ sequenceDiagram
     H->>H: Decode & Validate JSON
     H->>S: ProcessPurchase(productID, qty)
     
-    rect rgb(240, 240, 240)
+    rect rgb(50, 50, 50)
     Note over S, DB: Transaction Start
     S->>R: GetAvailableProductAndStockForUpdate
     R->>DB: SELECT ... FOR UPDATE (Pessimistic Lock)
@@ -173,3 +174,9 @@ The spike test simulates a rapid ramp-up of users to verify:
 - `model/`: Data structures and API request/response definitions.
 - `loadtest/`: k6 spike test scripts.
 - `tests/`: Integration tests.
+
+## Postman Collection
+
+You can find the Postman collection for this project in the `postman-collection/` directory. You can download and import it into Postman to quickly test the API endpoints:
+
+- [flash-sale.postman_collection.json](./postman-collection/flash-sale.postman_collection.json)
